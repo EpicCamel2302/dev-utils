@@ -1,2 +1,7 @@
 css-analyzer-csv-output/
 *.csv
+node_modules/
+web/dist/
+logs/
+bun.lockb
+*.log
