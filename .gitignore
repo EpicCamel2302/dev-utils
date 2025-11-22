@@ -1,1 +1,2 @@
-./css-analyzer-csv-output/
+css-analyzer-csv-output/
+*.csv
