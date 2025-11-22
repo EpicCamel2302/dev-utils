@@ -382,7 +382,7 @@ function main() {
   // Generate CSS
   console.log('📝 Generating replacement CSS...');
   const css = generateCSS(expandedClasses);
-  const cssFile = 'bootstrap-replacements.css';
+  const cssFile = './css-analyzer-csv-output/bootstrap-replacements.css';
   fs.writeFileSync(cssFile, css);
 
   // Count unique selectors for reporting
@@ -397,7 +397,7 @@ function main() {
   // Generate report
   console.log('📋 Generating analysis report...');
   const report = generateReport(data, frameworkClasses, usedClasses, expandedClasses.length, uniqueSelectors.size);
-  const reportFile = 'css-replacement-report.md';
+  const reportFile = './css-analyzer-csv-output/css-replacement-report.md';
   fs.writeFileSync(reportFile, report);
   console.log(`   ✓ Wrote ${reportFile}\n`);
 
