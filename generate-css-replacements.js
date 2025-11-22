@@ -4,7 +4,12 @@
  * CSS Replacement Generator
  *
  * Takes a CSV export from the CSS Class Analyzer and generates a replacement
- * stylesheet containing only the Bootstrap/CoreUI classes you're actually using.
+ * stylesheet containing only the Css framework classes you're actually using.
+ *
+ * Edit the Framework patterns and minimum usage threshold as needed.
+ *
+ * Useful for the process of ejecting from UI Frameworks while retaining
+ * only the styles you actually use.
  *
  * Usage:
  *   node generate-css-replacements.js css-analysis-export.csv
@@ -130,10 +135,40 @@ function categorizeClass(className, selector) {
 
 // Generate CSS from class definitions
 function generateCSS(classes) {
+  // Deduplicate by selector AND CSS content (same selector with same properties)
+  const selectorMap = new Map();
+
+  classes.forEach(cls => {
+    // Normalize CSS text for comparison (remove extra spaces, sort properties)
+    const normalizedCSS = cls.cssText
+      .split(';')
+      .map(p => p.trim())
+      .filter(p => p)
+      .sort()
+      .join('; ');
+
+    const key = `${cls.selector}::${cls.mediaQuery || 'no-media'}::${normalizedCSS}`;
+
+    if (!selectorMap.has(key)) {
+      selectorMap.set(key, {
+        ...cls,
+        classNames: new Set([cls.className])
+      });
+    } else {
+      // Same selector with same CSS - just track additional class names
+      selectorMap.get(key).classNames.add(cls.className);
+      // Keep the highest usage count
+      const existing = selectorMap.get(key);
+      existing.usageCount = Math.max(existing.usageCount, cls.usageCount);
+    }
+  });
+
+  const uniqueSelectors = Array.from(selectorMap.values());
+
+  // Now categorize the unique selectors
   const categorized = {};
 
-  // Group by category
-  classes.forEach(cls => {
+  uniqueSelectors.forEach(cls => {
     const category = categorizeClass(cls.className, cls.selector);
     if (!categorized[category]) {
       categorized[category] = [];
@@ -168,24 +203,39 @@ function generateCSS(classes) {
     css += `\n/* ========================================\n   ${category}\n   ======================================== */\n\n`;
 
     classes.forEach(cls => {
-      css += `/* Class: .${cls.className} */\n`;
+      const classNamesList = Array.from(cls.classNames).join(', .');
+      css += `/* Classes: .${classNamesList} */\n`;
       css += `/* Used by: ${cls.usageCount} element${cls.usageCount !== 1 ? 's' : ''} */\n`;
-      css += `/* Original selector: ${cls.selector} */\n`;
+
       if (cls.mediaQuery) {
-        css += `/* Media query: ${cls.mediaQuery} */\n`;
+        css += `@media ${cls.mediaQuery} {\n`;
+        css += `  ${cls.selector} {\n`;
+
+        // Format CSS properties
+        const properties = cls.cssText.split(';').filter(p => p.trim());
+        properties.forEach(prop => {
+          const trimmed = prop.trim();
+          if (trimmed) {
+            css += `    ${trimmed};\n`;
+          }
+        });
+
+        css += `  }\n`;
+        css += `}\n\n`;
+      } else {
+        css += `${cls.selector} {\n`;
+
+        // Format CSS properties
+        const properties = cls.cssText.split(';').filter(p => p.trim());
+        properties.forEach(prop => {
+          const trimmed = prop.trim();
+          if (trimmed) {
+            css += `  ${trimmed};\n`;
+          }
+        });
+
+        css += `}\n\n`;
       }
-      css += `${cls.selector} {\n`;
-
-      // Format CSS properties
-      const properties = cls.cssText.split(';').filter(p => p.trim());
-      properties.forEach(prop => {
-        const trimmed = prop.trim();
-        if (trimmed) {
-          css += `  ${trimmed};\n`;
-        }
-      });
-
-      css += `}\n\n`;
     });
   });
 
@@ -193,7 +243,7 @@ function generateCSS(classes) {
 }
 
 // Generate summary report
-function generateReport(allClasses, frameworkClasses, usedClasses) {
+function generateReport(allClasses, frameworkClasses, usedClasses, totalDefinitions, uniqueSelectors) {
   const report = `# CSS Replacement Analysis Report
 
 **Generated:** ${new Date().toISOString()}
@@ -204,6 +254,9 @@ function generateReport(allClasses, frameworkClasses, usedClasses) {
 - **Bootstrap/CoreUI classes found:** ${frameworkClasses.length}
 - **Actually used (≥${MIN_USAGE_THRESHOLD} elements):** ${usedClasses.length}
 - **Unused framework classes:** ${frameworkClasses.length - usedClasses.length}
+- **Total CSS rule definitions:** ${totalDefinitions}
+- **Unique selectors after deduplication:** ${uniqueSelectors}
+- **Reduction:** ${totalDefinitions - uniqueSelectors} duplicate selectors removed (${((1 - uniqueSelectors / totalDefinitions) * 100).toFixed(1)}% reduction)
 
 ## Usage Statistics
 
@@ -331,11 +384,19 @@ function main() {
   const css = generateCSS(expandedClasses);
   const cssFile = 'bootstrap-replacements.css';
   fs.writeFileSync(cssFile, css);
-  console.log(`   ✓ Wrote ${cssFile}\n`);
+
+  // Count unique selectors for reporting
+  const uniqueSelectors = new Set();
+  expandedClasses.forEach(cls => {
+    uniqueSelectors.add(`${cls.selector}::${cls.mediaQuery || 'no-media'}`);
+  });
+
+  console.log(`   ✓ Wrote ${cssFile}`);
+  console.log(`   Reduced ${expandedClasses.length} definitions to ${uniqueSelectors.size} unique selectors\n`);
 
   // Generate report
   console.log('📋 Generating analysis report...');
-  const report = generateReport(data, frameworkClasses, usedClasses);
+  const report = generateReport(data, frameworkClasses, usedClasses, expandedClasses.length, uniqueSelectors.size);
   const reportFile = 'css-replacement-report.md';
   fs.writeFileSync(reportFile, report);
   console.log(`   ✓ Wrote ${reportFile}\n`);
