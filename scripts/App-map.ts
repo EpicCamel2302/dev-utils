@@ -6,7 +6,7 @@
  * @param appType:select:optional:vite,none The type of application (default: vite)
  * @param ignoreExternals:boolean:optional:false Whether to ignore external dependencies (default: false)
  * @context terminal
- * @category Development
+ * @category development
  */
 
 import * as path from 'path';
