@@ -46,17 +46,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import ScriptRunner from './components/ScriptRunner.vue';
 
-const scripts = ref([]);
-const selectedScript = ref(null);
+import type { Script } from './types/scripts';
+
+const scripts = ref<Script[]>([]);
+const selectedScript = ref<Script | null>(null);
 const loading = ref(true);
-const error = ref(null);
+const error = ref<string | null>(null);
 
 const scriptsByCategory = computed(() => {
-  const grouped = {};
+  const grouped: Record<string, Script[]> = {};
   for (const script of scripts.value) {
     if (!grouped[script.category]) {
       grouped[script.category] = [];
@@ -73,14 +75,14 @@ async function loadScripts() {
     const response = await fetch('/api/scripts');
     if (!response.ok) throw new Error('Failed to load scripts');
     scripts.value = await response.json();
-  } catch (e) {
+  } catch (e: any) {
     error.value = e.message;
   } finally {
     loading.value = false;
   }
 }
 
-function selectScript(script) {
+function selectScript(script: Script) {
   selectedScript.value = script;
 }
 

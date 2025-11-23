@@ -63,38 +63,34 @@
         </button>
       </div>
     </form>
-
-    <div v-if="output.length > 0" class="output-log">
-      <div class="output-header">
-        <span>Output</span>
-        <button @click="clearOutput" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.875rem;">
-          Clear
-        </button>
-      </div>
-      <div class="output-content" ref="outputRef">
-        <div v-for="(line, index) in output" :key="index" :class="getLineClass(line)">
-          {{ line }}
-        </div>
-      </div>
-    </div>
+    <ScriptTerminal :output="output" ref="outputRef" />
   </div>
 </template>
 
-<script setup>
-import { ref, reactive, nextTick, watch } from 'vue';
+<script setup lang="ts">
+import { ref, reactive, nextTick } from 'vue';
+import ScriptTerminal from './ScriptTerminal.vue';
 
-const props = defineProps({
-  script: {
-    type: Object,
-    required: true
-  }
-});
+const props = defineProps<{
+    script: {
+        name: string;
+        description: string;
+        fileName: string;
+        params: Array<{
+            name: string;
+            type: 'string' | 'number' | 'boolean' | 'select';
+            description?: string;
+            required?: boolean;
+            default?: any;
+            options?: string[];
+        }>;
+    };
+}>();
 
-const formData = reactive({});
-const output = ref([]);
+const formData = reactive<Record<string, any>>({});
+const output = ref<string[]>([]);
 const isRunning = ref(false);
-const outputRef = ref(null);
-let eventSource = null;
+const outputRef = ref<HTMLElement | null>(null);
 
 // Initialize form data with defaults
 for (const param of props.script.params) {
@@ -112,10 +108,6 @@ async function executeScript() {
   output.value = [];
 
   try {
-    // Close any existing connection
-    if (eventSource) {
-      eventSource.close();
-    }
 
     // Create SSE connection
     const response = await fetch(`/api/execute/${props.script.fileName}`, {
@@ -136,6 +128,11 @@ async function executeScript() {
     }
 
     // Read SSE stream
+    if(response.body === null) {
+      output.value.push('[Error] No response body');
+      isRunning.value = false;
+      return;
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
 
@@ -166,32 +163,16 @@ async function executeScript() {
         }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     output.value.push(`[Error] ${error.message}`);
     isRunning.value = false;
   }
 }
 
 function stopScript() {
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
   isRunning.value = false;
   output.value.push('\n[Script stopped by user]');
 }
-
-function clearOutput() {
-  output.value = [];
-}
-
-function getLineClass(line) {
-  if (line.includes('[stderr]')) return 'output-line stderr';
-  if (line.includes('[Error]')) return 'output-line error';
-  if (line.includes('[Process exited with code 0]')) return 'output-line success';
-  return 'output-line';
-}
-
 async function scrollToBottom() {
   await nextTick();
   if (outputRef.value) {
